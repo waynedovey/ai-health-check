@@ -1,0 +1,64 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm-container
+        image: your-vllm-image
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - |
+              # Check if vLLM health endpoint is responding
+              if ! curl -s http://localhost:8000/health | grep -q "ok"; then
+                echo "vLLM health endpoint not ready"
+                exit 1
+              fi
+              
+              # Check CUDA availability
+              if ! python3 -c "import torch; print(torch.cuda.is_available())" | grep -q "True"; then
+                echo "CUDA not available"
+                exit 1
+              fi
+              
+              # Check MIG device assignment
+              MIG_DEVICE=$NVIDIA_VISIBLE_DEVICES
+              if [ -z "$MIG_DEVICE" ]; then
+                echo "No MIG device assigned"
+                exit 1
+              fi
+              
+              # Check GPU memory
+              if ! nvidia-smi --id=$(echo $MIG_DEVICE | cut -d'/' -f2) --query-gpu=memory.free --format=csv,noheader,nounits | awk '{ if ($1 >= 5000) exit 0; else exit 1 }'; then
+                echo "Insufficient GPU memory"
+                exit 1
+              fi
+              # If all checks pass
+              exit 0
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3

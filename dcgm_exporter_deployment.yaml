@@ -1,0 +1,35 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gpu-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm-container
+        image: your-vllm-image
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          exec:
+            command: ["/bin/sh", "-c", "curl -s http://localhost:8000/health | grep -q 'ok'"]
+      - name: nvidia-dcgm-exporter
+        image: nvidia/dcgm-exporter:latest
+        ports:
+        - containerPort: 9400
+        volumeMounts:
+        - name: nvidia-dcgm-exporter
+          mountPath: /etc/nvidia/
+      volumes:
+      - name: nvidia-dcgm-exporter
+        hostPath:
+          path: /var/lib/nvidia/
+          type: Directory

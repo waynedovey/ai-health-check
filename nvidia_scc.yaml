@@ -1,0 +1,10 @@
+
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: nvidia-privileged
+allowPrivilegedContainer: true
+allowHostPID: true
+allowHostIPC: true
+runAsUser:
+  type: RunAsAny
