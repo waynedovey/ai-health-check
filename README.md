@@ -52,13 +52,13 @@ Prometheus will be used to scrape the metrics from both vLLM and the DCGM Export
 oc apply -f prometheus_config.yaml
 ```
 
-Step 4: Set Up Horizontal Pod Autoscaler (HPA)
+### Step 4: Set Up Horizontal Pod Autoscaler (HPA)
 
 ```bash
 oc apply -f vllm_hpa.yaml
 ```
 
-Step 5: Apply Security Context Constraints (SCC)
+### Step 5: Apply Security Context Constraints (SCC)
 
 To ensure the containers in OpenShift have the proper access to GPU resources, apply the Security Context Constraints (SCC) configuration. This will allow the vLLM and DCGM Exporter containers to access the NVIDIA GPU resources:
 
