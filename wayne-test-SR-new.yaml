@@ -1,0 +1,75 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  annotations:
+    opendatahub.io/accelerator-name: nvidia-gpu
+    opendatahub.io/apiProtocol: REST
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+    opendatahub.io/template-display-name: vLLM ServingRuntime for KServe
+    opendatahub.io/template-name: vllm-runtime
+    openshift.io/display-name: wayne-test
+  labels:
+    opendatahub.io/dashboard: "true"
+  name: wayne-test
+  namespace: demo-genai
+spec:
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8080"
+  containers:
+  - args:
+    - --port=8080
+    - --model=/mnt/models
+    - --served-model-name={{.Name}}
+    command:
+    - python
+    - -m
+    - vllm.entrypoints.openai.api_server
+    env:
+    - name: HF_HOME
+      value: /tmp/hf_home
+    image: quay.io/modh/vllm@sha256:4f1f6b5738b311332b2bc786ea71259872e570081807592d97b4bd4cb65c4be1
+    name: kserve-container
+    ports:
+    - containerPort: 8080
+      protocol: TCP
+    # Added Liveness Probe
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8080
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+    # Added Readiness Probe
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - |
+          if ! curl -s http://localhost:8080/health | grep -q "ok"; then exit 1; fi
+          if ! python3 -c "import torch; print(torch.cuda.is_available())" | grep -q "True"; then exit 1; fi
+          MIG_DEVICE="$NVIDIA_VISIBLE_DEVICES"
+          if [ -z "$MIG_DEVICE" ]; then exit 1; fi
+          if ! nvidia-smi --id=$(echo "$MIG_DEVICE" | cut -d'/' -f2) --query-gpu=memory.free --format=csv,noheader,nounits | awk '{ if ($1 >= 5000) exit 0; else exit 1 }'; then exit 1; fi
+          exit 0
+      initialDelaySeconds: 60
+      periodSeconds: 15
+      timeoutSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+    volumeMounts:
+    - mountPath: /dev/shm
+      name: shm
+  multiModel: false
+  supportedModelFormats:
+  - autoSelect: true
+    name: vLLM
+  volumes:
+  - emptyDir:
+      medium: Memory
+      sizeLimit: 2Gi
+    name: shm
